@@ -8,7 +8,7 @@ import {
   Alert,
   StyleSheet,
   ActivityIndicator,
-  ScrollView, // Add ScrollView here
+  Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
@@ -24,7 +24,6 @@ const API_KEY = "AIzaSyCt94pkT0j8P3fAEQMHeq2KC0fvWi7wl10";
 const NewSalesOrderScreen = () => {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === "dark";
-  const [drafts, setDrafts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customers, setCustomers] = useState([]);
@@ -37,84 +36,13 @@ const NewSalesOrderScreen = () => {
   const [rate, setRate] = useState("");
   const [orderAmount, setOrderAmount] = useState("");
   const [orderId, setOrderId] = useState("");
-  // Add new state
 
-  // Add function to save draft
-  const saveDraft = async () => {
-    if (!customerName) {
-      Alert.alert("Error", "Please select a customer");
-      return;
-    }
-    if (products.length === 0) {
-      Alert.alert("Error", "Please add at least one product");
-      return;
-    }
-    if (!orderId) {
-      Alert.alert("Error", "Invalid order ID");
-      return;
-    }
-
-    const draft = {
-      customerName,
-      products,
-      orderId,
-      savedAt: formatDate(new Date()),
-    };
-
-    try {
-      const existingDrafts = await AsyncStorage.getItem("orderDrafts");
-      const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
-      draftsArray.push(draft);
-      await AsyncStorage.setItem("orderDrafts", JSON.stringify(draftsArray));
-      Alert.alert("Success", "Order saved as draft");
-
-      // Clear form after saving
-      setProducts([]);
-      setCustomerName("");
-      setSelectedProduct(null);
-      setQuantity("");
-      setRate("");
-      await generateOrderId();
-    } catch (error) {
-      console.error("Save draft error:", error);
-      Alert.alert("Error", "Failed to save draft");
-    }
-  };
-
-  // Add function to submit pending drafts
-  const submitPendingDrafts = async () => {
-    try {
-      const existingDrafts = await AsyncStorage.getItem("orderDrafts");
-      if (!existingDrafts) return;
-
-      const draftsArray = JSON.parse(existingDrafts);
-      if (draftsArray.length === 0) return;
-
-      setIsLoading(true);
-      for (const draft of draftsArray) {
-        // Restore draft data to state
-        setCustomerName(draft.customerName);
-        setProducts(draft.products);
-        setOrderId(draft.orderId);
-
-        // Submit the order
-        await submitOrder();
-      }
-      await AsyncStorage.removeItem("orderDrafts");
-      Alert.alert("Success", "All pending drafts submitted");
-    } catch (error) {
-      console.error("Failed to submit drafts:", error);
-      Alert.alert("Error", "Failed to submit some drafts");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Add network detection
+  // Network detection for reconnection
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       if (state.isConnected) {
-        submitPendingDrafts();
+        // We've removed the draft submission functionality
+        console.log("Network connected");
       }
     });
 
@@ -258,8 +186,7 @@ const NewSalesOrderScreen = () => {
     };
   }, []);
 
-  // Add this helper function at the top of your component
-  const formatIndianNumber = (num: number): string => {
+  const formatIndianNumber = (num) => {
     try {
       const parts = num.toFixed(2).split(".");
       const lastThree = parts[0].substring(parts[0].length - 3);
@@ -274,6 +201,7 @@ const NewSalesOrderScreen = () => {
       return "0.00";
     }
   };
+
   const addProduct = () => {
     if (!selectedProduct) {
       Alert.alert("Error", "Please select a product");
@@ -318,7 +246,7 @@ const NewSalesOrderScreen = () => {
   };
 
   // Format date to DD/MM/YYYY hh:mm AM/PM
-  const formatDate = (date: Date) => {
+  const formatDate = (date) => {
     const day = String(date.getDate()).padStart(2, "0");
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const year = date.getFullYear();
@@ -333,7 +261,6 @@ const NewSalesOrderScreen = () => {
     return `${day}/${month}/${year} ${formattedHours}:${minutes} ${ampm}`;
   };
 
-  // Replace the submitOrder function with this:
   const submitOrder = async () => {
     if (!customerName) {
       Alert.alert("Error", "Please select a customer");
@@ -405,6 +332,19 @@ const NewSalesOrderScreen = () => {
     }, 0);
   };
 
+  // Create custom picker items with better visibility
+  const renderPickerItems = (items, labelKey, valueKey) => {
+    return items.map((item, index) => (
+      <Picker.Item
+        key={index}
+        label={item[labelKey]}
+        value={item[valueKey]}
+        // On Android, we can't directly style the Picker.Item, but we ensure the contrast is good
+        color={Platform.OS === "ios" ? (isDark ? "#ffffff" : "#000000") : null}
+      />
+    ));
+  };
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -431,8 +371,8 @@ const NewSalesOrderScreen = () => {
       borderRadius: 10,
       overflow: "hidden",
       backgroundColor: isDark
-        ? "rgba(255, 255, 255, 0.08)"
-        : "rgba(245, 246, 250, 0.8)", // Semi-transparent background
+        ? "rgba(30, 30, 30, 1)" // Darker background in dark mode for better contrast
+        : "rgba(245, 246, 250, 0.8)",
       borderWidth: 1,
       borderColor: isDark ? "rgba(255, 255, 255, 0.15)" : "#dcdde1",
     },
@@ -443,8 +383,8 @@ const NewSalesOrderScreen = () => {
     },
     input: {
       backgroundColor: isDark
-        ? "rgba(255, 255, 255, 0.08)"
-        : "rgba(245, 246, 250, 0.8)", // Semi-transparent input background
+        ? "rgba(30, 30, 30, 1)" // Matching the picker background
+        : "rgba(245, 246, 250, 0.8)",
       padding: 15,
       borderRadius: 10,
       marginBottom: 15,
@@ -465,15 +405,6 @@ const NewSalesOrderScreen = () => {
       fontSize: 16,
       fontWeight: "bold",
     },
-    draftButton: {
-      backgroundColor: isDark
-        ? "rgba(142, 68, 173, 0.8)"
-        : "rgba(155, 89, 182, 0.8)", // Semi-transparent background
-      padding: 15,
-      borderRadius: 10,
-      alignItems: "center",
-      marginVertical: 10,
-    },
     productItem: {
       backgroundColor: isDark
         ? "rgba(51, 51, 51, 0.8)"
@@ -487,7 +418,7 @@ const NewSalesOrderScreen = () => {
         : "rgba(220, 221, 225, 0.5)",
     },
     productItemText: {
-      color: isDark ? "#000000" : "#000000", // Change both to black in dark and light mode
+      color: isDark ? "#ffffff" : "#000000", // Changed to white in dark mode for better contrast
       fontSize: 16,
     },
     totalAmount: {
@@ -499,7 +430,7 @@ const NewSalesOrderScreen = () => {
     },
     orderIdText: {
       fontSize: 16,
-      color: isDark ? "#888888" : "#666666",
+      color: isDark ? "#bbbbbb" : "#666666", // Lighter color in dark mode
       marginBottom: 10,
     },
     actionButtons: {
@@ -515,6 +446,23 @@ const NewSalesOrderScreen = () => {
     },
     iconStyle: {
       color: isDark ? "#ffffff" : "#000000",
+    },
+    // Add a new style for custom dropdown that will replace the Picker on Android
+    customDropdown: {
+      padding: 15,
+      backgroundColor: isDark ? "#333333" : "#f5f6fa",
+      borderRadius: 10,
+      marginBottom: 15,
+      borderWidth: 1,
+      borderColor: isDark ? "#444444" : "#dcdde1",
+    },
+    customDropdownText: {
+      color: isDark ? "#ffffff" : "#000000",
+      fontSize: 16,
+    },
+    androidPickerDark: {
+      backgroundColor: "#222222",
+      color: "#ffffff",
     },
   });
 
@@ -546,69 +494,175 @@ const NewSalesOrderScreen = () => {
 
             {/* Customer Selection */}
             <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={selectedLetter}
-                onValueChange={(itemValue) => {
-                  setSelectedLetter(itemValue);
-                  fetchCustomers(itemValue);
-                }}
-                style={styles.picker}
-                dropdownIconColor={isDark ? "#ffffff" : "#000000"}
-              >
-                <Picker.Item label="Select Letter" value="" />
-                {[...Array(26)].map((_, i) => (
-                  <Picker.Item
-                    key={i}
-                    label={String.fromCharCode(65 + i)}
-                    value={String.fromCharCode(65 + i)}
-                    color={isDark ? "#ffffff" : "#000000"}
-                  />
-                ))}
-              </Picker>
+              {Platform.OS === "ios" ? (
+                <Picker
+                  selectedValue={selectedLetter}
+                  onValueChange={(itemValue) => {
+                    setSelectedLetter(itemValue);
+                    fetchCustomers(itemValue);
+                  }}
+                  style={styles.picker}
+                  itemStyle={{ color: isDark ? "#ffffff" : "#000000" }}
+                  dropdownIconColor={isDark ? "#ffffff" : "#000000"}
+                >
+                  <Picker.Item label="Select Letter" value="" />
+                  {[...Array(26)].map((_, i) => (
+                    <Picker.Item
+                      key={i}
+                      label={String.fromCharCode(65 + i)}
+                      value={String.fromCharCode(65 + i)}
+                      color={isDark ? "#ffffff" : "#000000"}
+                    />
+                  ))}
+                </Picker>
+              ) : (
+                // On Android, use a darker background for the picker in dark mode
+                <View
+                  style={{
+                    backgroundColor: isDark ? "#222222" : "#f5f6fa",
+                    borderRadius: 8,
+                  }}
+                >
+                  <Picker
+                    selectedValue={selectedLetter}
+                    onValueChange={(itemValue) => {
+                      setSelectedLetter(itemValue);
+                      fetchCustomers(itemValue);
+                    }}
+                    style={[
+                      styles.picker,
+                      isDark && {
+                        color: "#ffffff",
+                        backgroundColor: "#222222",
+                      },
+                    ]}
+                    dropdownIconColor={isDark ? "#ffffff" : "#000000"}
+                  >
+                    <Picker.Item label="Select Letter" value="" />
+                    {[...Array(26)].map((_, i) => (
+                      <Picker.Item
+                        key={i}
+                        label={String.fromCharCode(65 + i)}
+                        value={String.fromCharCode(65 + i)}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              )}
             </View>
 
             <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={customerName}
-                onValueChange={setCustomerName}
-                style={styles.picker}
-                dropdownIconColor={isDark ? "#ffffff" : "#000000"}
-              >
-                <Picker.Item label="Select Customer" value="" />
-                {customers.map((customer, index) => (
-                  <Picker.Item
-                    key={index}
-                    label={customer["Customer NAME"]}
-                    value={customer["Customer NAME"]}
-                    color={isDark ? "#ffffff" : "#000000"}
-                  />
-                ))}
-              </Picker>
+              {Platform.OS === "ios" ? (
+                <Picker
+                  selectedValue={customerName}
+                  onValueChange={setCustomerName}
+                  style={styles.picker}
+                  itemStyle={{ color: isDark ? "#ffffff" : "#000000" }}
+                  dropdownIconColor={isDark ? "#ffffff" : "#000000"}
+                >
+                  <Picker.Item label="Select Customer" value="" />
+                  {customers.map((customer, index) => (
+                    <Picker.Item
+                      key={index}
+                      label={customer["Customer NAME"]}
+                      value={customer["Customer NAME"]}
+                      color={isDark ? "#ffffff" : "#000000"}
+                    />
+                  ))}
+                </Picker>
+              ) : (
+                // Darker background for Android picker in dark mode
+                <View
+                  style={{
+                    backgroundColor: isDark ? "#222222" : "#f5f6fa",
+                    borderRadius: 8,
+                  }}
+                >
+                  <Picker
+                    selectedValue={customerName}
+                    onValueChange={setCustomerName}
+                    style={[
+                      styles.picker,
+                      isDark && {
+                        color: "#ffffff",
+                        backgroundColor: "#222222",
+                      },
+                    ]}
+                    dropdownIconColor={isDark ? "#ffffff" : "#000000"}
+                  >
+                    <Picker.Item label="Select Customer" value="" />
+                    {customers.map((customer, index) => (
+                      <Picker.Item
+                        key={index}
+                        label={customer["Customer NAME"]}
+                        value={customer["Customer NAME"]}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              )}
             </View>
 
             {/* Product Selection */}
             <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={selectedProduct?.["Product CODE"]}
-                onValueChange={handleProductSelect}
-                style={styles.picker}
-                dropdownIconColor={isDark ? "#ffffff" : "#000000"}
-              >
-                <Picker.Item label="Select Product" value="" />
-                {productList.map((product, index) => (
-                  <Picker.Item
-                    key={index}
-                    label={`${product["Product NAME"]} (₹${formatIndianNumber(
-                      parseFloat(product["Rate"])
-                    )})`}
-                    value={product["Product CODE"]}
-                    color={isDark ? "#ffffff" : "#000000"}
-                  />
-                ))}
-              </Picker>
+              {Platform.OS === "ios" ? (
+                <Picker
+                  selectedValue={selectedProduct?.["Product CODE"]}
+                  onValueChange={handleProductSelect}
+                  style={styles.picker}
+                  itemStyle={{ color: isDark ? "#ffffff" : "#000000" }}
+                  dropdownIconColor={isDark ? "#ffffff" : "#000000"}
+                >
+                  <Picker.Item label="Select Product" value="" />
+                  {productList.map((product, index) => (
+                    <Picker.Item
+                      key={index}
+                      label={`${product["Product NAME"]} (₹${formatIndianNumber(
+                        parseFloat(product["Rate"])
+                      )})`}
+                      value={product["Product CODE"]}
+                      color={isDark ? "#ffffff" : "#000000"}
+                    />
+                  ))}
+                </Picker>
+              ) : (
+                // Darker background for Android picker in dark mode
+                <View
+                  style={{
+                    backgroundColor: isDark ? "#222222" : "#f5f6fa",
+                    borderRadius: 8,
+                  }}
+                >
+                  <Picker
+                    selectedValue={selectedProduct?.["Product CODE"]}
+                    onValueChange={handleProductSelect}
+                    style={[
+                      styles.picker,
+                      isDark && {
+                        color: "#ffffff",
+                        backgroundColor: "#222222",
+                      },
+                    ]}
+                    dropdownIconColor={isDark ? "#ffffff" : "#000000"}
+                  >
+                    <Picker.Item label="Select Product" value="" />
+                    {productList.map((product, index) => (
+                      <Picker.Item
+                        key={index}
+                        label={`${
+                          product["Product NAME"]
+                        } (₹${formatIndianNumber(
+                          parseFloat(product["Rate"])
+                        )})`}
+                        value={product["Product CODE"]}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              )}
             </View>
 
-            {/* Quantity Input */}
+            {/* Quantity Input with fixed keyboard issue */}
             {selectedProduct && (
               <TextInput
                 style={styles.input}
@@ -616,8 +670,10 @@ const NewSalesOrderScreen = () => {
                 value={quantity}
                 onChangeText={setQuantity}
                 keyboardType="numeric"
-                placeholderTextColor={isDark ? "#888888" : "#666666"}
-                onFocus={() => console.log("Input focused")} // Optionally log focus for debugging
+                placeholderTextColor={isDark ? "#bbbbbb" : "#666666"}
+                // Prevent keyboard from dismissing on submit
+                returnKeyType="done"
+                blurOnSubmit={false}
               />
             )}
 
@@ -667,7 +723,11 @@ const NewSalesOrderScreen = () => {
           <Text
             style={[
               styles.productItemText,
-              { textAlign: "center", marginTop: 20 },
+              {
+                textAlign: "center",
+                marginTop: 20,
+                color: isDark ? "#ffffff" : "#000000",
+              },
             ]}
           >
             No products added yet
